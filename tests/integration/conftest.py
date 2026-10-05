@@ -1,5 +1,6 @@
 import os
 from collections.abc import AsyncIterator, Iterator
+from unittest.mock import AsyncMock
 
 import pytest
 from alembic import command
@@ -54,8 +55,11 @@ async def db_session(db_engine: AsyncEngine) -> AsyncIterator[AsyncSession]:
 
 
 @pytest.fixture
-async def api_client(db_session: AsyncSession) -> AsyncIterator[AsyncClient]:
-    from itk_academy.api.v1.deps import _session_dep
+async def api_client(
+    db_session: AsyncSession,
+    fake_provider_client: AsyncMock,
+) -> AsyncIterator[AsyncClient]:
+    from itk_academy.api.v1.deps import _session_dep, get_provider_client
     from itk_academy.main import create_app
 
     async def _override_session() -> AsyncIterator[AsyncSession]:
@@ -63,9 +67,24 @@ async def api_client(db_session: AsyncSession) -> AsyncIterator[AsyncClient]:
 
     app = create_app()
     app.dependency_overrides[_session_dep] = _override_session
+    app.dependency_overrides[get_provider_client] = lambda: fake_provider_client
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         yield client
 
     app.dependency_overrides.clear()
+
+
+@pytest.fixture
+def fake_provider_client() -> AsyncMock:
+    return AsyncMock()
+
+
+@pytest.fixture(autouse=True)
+def _clear_seats_cache() -> Iterator[None]:
+    from itk_academy.api.v1.deps import get_seats_cache
+
+    get_seats_cache.cache_clear()
+    yield
+    get_seats_cache.cache_clear()

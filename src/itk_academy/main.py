@@ -31,8 +31,18 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     else:
         logger.warning("database_url_not_set")
 
+    from itk_academy.events_provider.client import EventsProviderClient
+
+    provider_client = EventsProviderClient(
+        base_url=settings.events_provider_url,
+        api_key=settings.events_provider_api_key,
+    )
+    app.state.events_provider_client = provider_client
+    logger.info("provider_client_initialized")
+
     yield
 
+    await provider_client.aclose()
     if engine is not None:
         await engine.dispose()
     logger.info("app_stopping")

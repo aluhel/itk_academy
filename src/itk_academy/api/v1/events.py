@@ -1,13 +1,19 @@
 from datetime import date
 from typing import Annotated
+from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Query, Request, status
 
-from itk_academy.api.v1.deps import EventRepositoryDep
+from itk_academy.api.v1.deps import EventRepositoryDep, SeatsUsecaseDep
 from itk_academy.api.v1.schemas.events import (
     EventDetail,
     EventListItem,
     PaginatedEvents,
+    SeatsResponse,
+)
+from itk_academy.services.seats import (
+    EventNotFoundError,
+    EventNotPublishedError,
 )
 
 router = APIRouter()
@@ -52,6 +58,32 @@ async def list_events(
     )
 
 
+# ВАЖНО: этот роут ДО /events/{event_id}, иначе FastAPI может поймать seats как event_id
+@router.get(
+    "/events/{event_id}/seats",
+    response_model=SeatsResponse,
+    summary="Available seats for an event",
+)
+async def get_event_seats(
+    event_id: UUID,
+    usecase: SeatsUsecaseDep,
+) -> SeatsResponse:
+    try:
+        seats = await usecase.do(event_id)
+    except EventNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Event not found",
+        ) from exc
+    except EventNotPublishedError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Event is not published for registration",
+        ) from exc
+
+    return SeatsResponse(event_id=event_id, available_seats=seats)
+
+
 @router.get(
     "/events/{event_id}",
     response_model=EventDetail,
@@ -61,8 +93,6 @@ async def get_event(
     event_id: str,
     repo: EventRepositoryDep,
 ) -> EventDetail:
-    from uuid import UUID
-
     try:
         event_uuid = UUID(event_id)
     except ValueError as exc:

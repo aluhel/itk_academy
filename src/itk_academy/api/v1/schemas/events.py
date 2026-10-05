@@ -52,3 +52,8 @@ class PaginatedEvents(BaseModel):
     next: str | None
     previous: str | None
     results: list[EventListItem]
+
+
+class SeatsResponse(BaseModel):
+    event_id: UUID
+    available_seats: list[str]
