@@ -9,7 +9,9 @@ from itk_academy.core.cache import TTLCache
 from itk_academy.db.session import get_session
 from itk_academy.events_provider.client import EventsProviderClient
 from itk_academy.repositories.events import SqlAlchemyEventRepository
+from itk_academy.repositories.tickets import SqlAlchemyTicketRepository
 from itk_academy.services.seats import SEATS_CACHE_TTL_SECONDS, GetSeatsUsecase
+from itk_academy.services.tickets import CancelTicketUsecase, CreateTicketUsecase
 
 
 async def _session_dep() -> AsyncIterator[AsyncSession]:
@@ -58,4 +60,52 @@ def get_seats_usecase(
 SeatsUsecaseDep = Annotated[
     GetSeatsUsecase,
     Depends(get_seats_usecase),
+]
+
+
+def get_ticket_repository(
+    session: Annotated[AsyncSession, Depends(_session_dep)],
+) -> SqlAlchemyTicketRepository:
+    return SqlAlchemyTicketRepository(session)
+
+
+TicketRepositoryDep = Annotated[
+    SqlAlchemyTicketRepository,
+    Depends(get_ticket_repository),
+]
+
+
+def get_create_ticket_usecase(
+    repo: EventRepositoryDep,
+    tickets: TicketRepositoryDep,
+    client: ProviderClientDep,
+) -> CreateTicketUsecase:
+    return CreateTicketUsecase(
+        client=client,
+        events=repo,
+        tickets=tickets,
+    )
+
+
+CreateTicketUsecaseDep = Annotated[
+    CreateTicketUsecase,
+    Depends(get_create_ticket_usecase),
+]
+
+
+def get_cancel_ticket_usecase(
+    repo: EventRepositoryDep,
+    tickets: TicketRepositoryDep,
+    client: ProviderClientDep,
+) -> CancelTicketUsecase:
+    return CancelTicketUsecase(
+        client=client,
+        events=repo,
+        tickets=tickets,
+    )
+
+
+CancelTicketUsecaseDep = Annotated[
+    CancelTicketUsecase,
+    Depends(get_cancel_ticket_usecase),
 ]

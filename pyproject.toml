@@ -17,6 +17,7 @@ dependencies = [
     "structlog>=24.4",
     "sentry-sdk[fastapi]>=2.19",
     "prometheus-fastapi-instrumentator>=7.0",
+    "email-validator>=2.3.0",
 ]
 
 [dependency-groups]
