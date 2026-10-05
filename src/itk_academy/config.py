@@ -20,6 +20,9 @@ class Settings(BaseSettings):
 
     database_url: str = ""
 
+    # Observability
+    sentry_dsn: str = ""
+
     # Час по UTC, в который запускается ежедневная синхронизация
     sync_hour_utc: int = 2
 

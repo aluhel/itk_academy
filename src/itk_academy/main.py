@@ -1,10 +1,13 @@
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
+import sentry_sdk
 import structlog
 from fastapi import FastAPI
+from prometheus_fastapi_instrumentator import Instrumentator
 from sqlalchemy import text
 
+from itk_academy.api.middleware import RequestIDMiddleware
 from itk_academy.api.v1.router import api_router
 from itk_academy.config import get_settings
 from itk_academy.core.logging import configure_logging
@@ -18,6 +21,14 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     settings = get_settings()
     configure_logging(settings.log_level)
     logger.info("app_starting", app=settings.app, env=settings.env)
+
+    if settings.sentry_dsn:
+        sentry_sdk.init(
+            dsn=settings.sentry_dsn,
+            environment=settings.env,
+            traces_sample_rate=0.1,
+        )
+        logger.info("sentry_initialized")
 
     engine = None
     if settings.database_url:
@@ -57,7 +68,15 @@ def create_app() -> FastAPI:
         redoc_url="/redoc",
         openapi_url="/openapi.json",
     )
+    app.add_middleware(RequestIDMiddleware)
     app.include_router(api_router, prefix="/api")
+
+    Instrumentator(
+        should_group_status_codes=False,
+        should_ignore_untemplated=True,
+        excluded_handlers=["/metrics", "/docs", "/redoc", "/openapi.json"],
+    ).instrument(app).expose(app, endpoint="/metrics", include_in_schema=False)
+
     return app
 
 
