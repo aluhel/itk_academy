@@ -1,8 +1,10 @@
+import os
 from collections.abc import AsyncIterator, Iterator
 
 import pytest
 from alembic import command
 from alembic.config import Config
+from httpx import ASGITransport, AsyncClient
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
@@ -10,19 +12,20 @@ from sqlalchemy.ext.asyncio import (
     async_sessionmaker,
     create_async_engine,
 )
-from testcontainers.community.postgres import PostgresContainer
 
 
 @pytest.fixture(scope="session")
-def postgres_container() -> Iterator[PostgresContainer]:
+def database_url() -> Iterator[str]:
+    env_url = os.environ.get("DATABASE_URL")
+    if env_url:
+        yield env_url
+        return
+
+    from testcontainers.community.postgres import PostgresContainer
+
     with PostgresContainer("postgres:16") as postgres:
-        yield postgres
-
-
-@pytest.fixture(scope="session")
-def database_url(postgres_container: PostgresContainer) -> str:
-    sync_url = postgres_container.get_connection_url()
-    return sync_url.replace("postgresql+psycopg2://", "postgresql+asyncpg://")
+        sync_url = postgres.get_connection_url()
+        yield sync_url.replace("postgresql+psycopg2://", "postgresql+asyncpg://")
 
 
 @pytest.fixture(scope="session")
@@ -48,3 +51,21 @@ async def db_session(db_engine: AsyncEngine) -> AsyncIterator[AsyncSession]:
         )
         await session.commit()
         yield session
+
+
+@pytest.fixture
+async def api_client(db_session: AsyncSession) -> AsyncIterator[AsyncClient]:
+    from itk_academy.api.v1.deps import _session_dep
+    from itk_academy.main import create_app
+
+    async def _override_session() -> AsyncIterator[AsyncSession]:
+        yield db_session
+
+    app = create_app()
+    app.dependency_overrides[_session_dep] = _override_session
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        yield client
+
+    app.dependency_overrides.clear()
