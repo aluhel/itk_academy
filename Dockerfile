@@ -1,11 +1,28 @@
 FROM python:3.11-slim
 
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /usr/local/bin/
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    UV_LINK_MODE=copy \
+    UV_COMPILE_BYTECODE=1 \
+    PYTHONPATH=/app/src
+
 RUN addgroup --system --gid 1000 appuser && \
     adduser --system --uid 1000 --ingroup appuser appuser
 
 WORKDIR /app
-COPY --chown=appuser:appuser app.py .
+
+COPY pyproject.toml uv.lock ./
+RUN uv sync --frozen --no-dev --no-install-project
+
+COPY --chown=appuser:appuser src/ ./src/
+COPY --chown=appuser:appuser run.sh ./
+RUN chmod +x run.sh
 
 USER appuser
 
-CMD ["python", "app.py"]
+ENV PATH="/app/.venv/bin:$PATH"
+
+EXPOSE 8000
+CMD ["bash", "./run.sh"]
