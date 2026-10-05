@@ -1,12 +1,11 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, Enum, ForeignKey, Integer, String
+from sqlalchemy import DateTime, ForeignKey, Integer, String
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from itk_academy.db.base import Base
-from itk_academy.models.enums import EventStatus
 
 
 class Event(Base):
@@ -24,11 +23,7 @@ class Event(Base):
         DateTime(timezone=True), nullable=False, index=True
     )
     registration_deadline: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    status: Mapped[EventStatus] = mapped_column(
-        Enum(EventStatus, name="event_status", native_enum=True),
-        nullable=False,
-        index=True,
-    )
+    status: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
     number_of_visitors: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
     changed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)

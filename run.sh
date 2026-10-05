@@ -5,8 +5,15 @@ set -euo pipefail
 if [ -n "${DATABASE_URL:-}" ]; then
     echo "Running database migrations..."
     alembic upgrade head
+
+    echo "Starting celery worker and beat..."
+    celery -A itk_academy.worker.celery_app worker -P solo -l INFO &
+    celery -A itk_academy.worker.celery_app beat -l INFO -s /tmp/celerybeat-schedule &
+else
+    echo "DATABASE_URL not set — running without celery."
 fi
 
+echo "Starting uvicorn..."
 exec uvicorn itk_academy.main:app \
     --host 0.0.0.0 \
     --port "${PORT:-8000}" \

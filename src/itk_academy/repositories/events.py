@@ -3,6 +3,7 @@ from datetime import UTC, date, datetime, time
 from uuid import UUID
 
 from sqlalchemy import func, select
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from itk_academy.models.event import Event
@@ -41,3 +42,26 @@ class SqlAlchemyEventRepository:
         total = count_result.scalar_one()
 
         return events, total
+
+    async def upsert_many(self, events: Sequence[dict]) -> int:
+        if not events:
+            return 0
+
+        stmt = insert(Event).values(list(events))
+        stmt = stmt.on_conflict_do_update(
+            index_elements=[Event.id],
+            set_={
+                "place_id": stmt.excluded.place_id,
+                "name": stmt.excluded.name,
+                "event_time": stmt.excluded.event_time,
+                "registration_deadline": stmt.excluded.registration_deadline,
+                "status": stmt.excluded.status,
+                "number_of_visitors": stmt.excluded.number_of_visitors,
+                "changed_at": stmt.excluded.changed_at,
+                "created_at": stmt.excluded.created_at,
+                "status_changed_at": stmt.excluded.status_changed_at,
+            },
+        )
+        await self._session.execute(stmt)
+        await self._session.commit()
+        return len(events)

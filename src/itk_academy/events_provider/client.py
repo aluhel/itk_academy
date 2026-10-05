@@ -31,6 +31,7 @@ class EventsProviderClient:
                 "x-api-key": api_key,
                 "Accept": "application/json",
             },
+            follow_redirects=True,
         )
 
     async def __aenter__(self) -> "EventsProviderClient":

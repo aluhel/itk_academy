@@ -20,6 +20,16 @@ class Settings(BaseSettings):
 
     database_url: str = ""
 
+    # Час по UTC, в который запускается ежедневная синхронизация
+    sync_hour_utc: int = 2
+
+    @property
+    def celery_broker_url(self) -> str:
+        if not self.database_url:
+            return ""
+        sync_url = self.database_url.replace("+asyncpg", "+psycopg2")
+        return f"sqla+{sync_url}"
+
 
 @lru_cache
 def get_settings() -> Settings:
