@@ -1,4 +1,5 @@
 from datetime import UTC, datetime, timedelta
+from unittest.mock import AsyncMock
 from uuid import uuid4
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -136,3 +137,27 @@ async def test_delete_ticket_returns_404_for_unknown(
     response = await api_client.delete(f"/api/tickets/{uuid4()}")
 
     assert response.status_code == 404
+
+
+async def test_post_ticket_returns_502_on_provider_error(
+    api_client,
+    db_session: AsyncSession,
+    fake_provider_client: AsyncMock,
+) -> None:
+    from itk_academy.events_provider.exceptions import EventsProviderUnavailableError
+
+    event = await _seed_published_event(db_session)
+    fake_provider_client.seats.side_effect = EventsProviderUnavailableError("timeout")
+
+    response = await api_client.post(
+        "/api/tickets",
+        json={
+            "event_id": str(event.id),
+            "first_name": "Ivan",
+            "last_name": "Ivanov",
+            "email": "ivan@example.com",
+            "seat": "A1",
+        },
+    )
+
+    assert response.status_code == 502

@@ -42,17 +42,19 @@ def client(mock_http: AsyncMock) -> EventsProviderClient:
 
 
 async def test_seats_returns_seats(client: EventsProviderClient, mock_http: AsyncMock) -> None:
-    mock_http.get.return_value = _make_response(200, {"seats": ["A1", "A2", "B5"]})
+    mock_http.request.return_value = _make_response(200, {"seats": ["A1", "A2", "B5"]})
 
     result = await client.seats(event_id=EVENT_ID)
 
     assert result.event_id == EVENT_ID
     assert result.seats == ["A1", "A2", "B5"]
-    assert mock_http.get.call_args.args[0] == f"/api/events/{EVENT_ID}/seats/"
+    call_args = mock_http.request.call_args
+    assert call_args.args[0] == "GET"
+    assert call_args.args[1] == f"/api/events/{EVENT_ID}/seats/"
 
 
 async def test_seats_raises_not_found(client: EventsProviderClient, mock_http: AsyncMock) -> None:
-    mock_http.get.return_value = _make_response(404, {"detail": "Event not found"})
+    mock_http.request.return_value = _make_response(404, {"detail": "Event not found"})
 
     with pytest.raises(EventsProviderNotFoundError):
         await client.seats(event_id=EVENT_ID)
@@ -61,7 +63,7 @@ async def test_seats_raises_not_found(client: EventsProviderClient, mock_http: A
 async def test_seats_raises_server_error(
     client: EventsProviderClient, mock_http: AsyncMock
 ) -> None:
-    mock_http.get.return_value = _make_response(
+    mock_http.request.return_value = _make_response(
         500, text="UnexpectedEventStatus: Event is not published for registration."
     )
 

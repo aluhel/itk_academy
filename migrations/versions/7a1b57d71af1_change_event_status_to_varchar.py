@@ -31,7 +31,12 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.execute("DELETE FROM events WHERE status NOT IN ('NEW', 'PUBLISHED')")
+    # В старом enum event_status только два значения: NEW и PUBLISHED.
+    # Всё, что не влезает, маппим в 'new' — иначе теряем данные.
+    op.execute(
+        "UPDATE events SET status = 'new' "
+        "WHERE lower(status) NOT IN ('new', 'published')"
+    )
     op.execute("CREATE TYPE event_status AS ENUM ('NEW', 'PUBLISHED')")
     op.alter_column(
         "events",
@@ -39,5 +44,5 @@ def downgrade() -> None:
         existing_type=sa.String(length=50),
         type_=sa.Enum("NEW", "PUBLISHED", name="event_status"),
         existing_nullable=False,
-        postgresql_using="status::event_status",
+        postgresql_using="upper(status)::event_status",
     )

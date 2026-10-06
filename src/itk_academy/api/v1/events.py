@@ -11,6 +11,12 @@ from itk_academy.api.v1.schemas.events import (
     PaginatedEvents,
     SeatsResponse,
 )
+from itk_academy.events_provider.exceptions import (
+    EventsProviderBadRequestError,
+    EventsProviderError,
+    EventsProviderNotFoundError,
+    EventsProviderRateLimitError,
+)
 from itk_academy.services.seats import (
     EventNotFoundError,
     EventNotPublishedError,
@@ -39,7 +45,7 @@ async def list_events(
     )
 
     base_url = str(request.url).split("?")[0]
-    query_params = _build_query_params(date_from=date_from, page_size=page_size)
+    query_params = _build_query_params(date_from=date_from)
 
     next_url = (
         f"{base_url}?page={page + 1}&page_size={page_size}{query_params}"
@@ -58,7 +64,6 @@ async def list_events(
     )
 
 
-# ВАЖНО: этот роут ДО /events/{event_id}, иначе FastAPI может поймать seats как event_id
 @router.get(
     "/events/{event_id}/seats",
     response_model=SeatsResponse,
@@ -80,6 +85,27 @@ async def get_event_seats(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Event is not published for registration",
         ) from exc
+    except EventsProviderNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
+    except EventsProviderBadRequestError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+    except EventsProviderRateLimitError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Events provider rate limit exceeded",
+            headers={"Retry-After": "5"},
+        ) from exc
+    except EventsProviderError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Events provider unavailable",
+        ) from exc
 
     return SeatsResponse(event_id=event_id, available_seats=seats)
 
@@ -90,18 +116,10 @@ async def get_event_seats(
     summary="Event details",
 )
 async def get_event(
-    event_id: str,
+    event_id: UUID,
     repo: EventRepositoryDep,
 ) -> EventDetail:
-    try:
-        event_uuid = UUID(event_id)
-    except ValueError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Event not found",
-        ) from exc
-
-    event = await repo.get(event_uuid)
+    event = await repo.get(event_id)
     if event is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -110,11 +128,7 @@ async def get_event(
     return EventDetail.model_validate(event)
 
 
-def _build_query_params(
-    *,
-    date_from: date | None,
-    page_size: int,
-) -> str:
+def _build_query_params(*, date_from: date | None) -> str:
     if date_from is None:
         return ""
     return f"&date_from={date_from.isoformat()}"

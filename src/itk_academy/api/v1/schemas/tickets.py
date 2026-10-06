@@ -8,7 +8,7 @@ class TicketCreateRequest(BaseModel):
     first_name: str = Field(min_length=1, max_length=120)
     last_name: str = Field(min_length=1, max_length=120)
     email: EmailStr
-    seat: str = Field(min_length=1, max_length=20)
+    seat: str = Field(min_length=2, max_length=20, pattern=r"^[A-Z]\d+$")
 
 
 class TicketCreateResponse(BaseModel):

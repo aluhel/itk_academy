@@ -11,6 +11,7 @@ from itk_academy.events_provider.exceptions import (
     EventsProviderAuthError,
     EventsProviderNotFoundError,
     EventsProviderServerError,
+    EventsProviderUnavailableError,
 )
 
 PLACE_ID = uuid4()
@@ -70,33 +71,34 @@ def client(mock_http: AsyncMock) -> EventsProviderClient:
 async def test_events_sends_changed_at_and_api_key(
     client: EventsProviderClient, mock_http: AsyncMock
 ) -> None:
-    mock_http.get.return_value = _make_response(
+    mock_http.request.return_value = _make_response(
         200,
         {"next": None, "previous": None, "results": []},
     )
 
     await client.events(changed_at=date(2000, 1, 1))
 
-    mock_http.get.assert_awaited_once()
-    call_args = mock_http.get.call_args
-    assert call_args.args[0] == "/api/events/"
+    mock_http.request.assert_awaited_once()
+    call_args = mock_http.request.call_args
+    assert call_args.args[0] == "GET"
+    assert call_args.args[1] == "/api/events/"
     assert call_args.kwargs["params"] == {"changed_at": "2000-01-01"}
 
 
 async def test_events_passes_cursor(client: EventsProviderClient, mock_http: AsyncMock) -> None:
-    mock_http.get.return_value = _make_response(
+    mock_http.request.return_value = _make_response(
         200,
         {"next": None, "previous": None, "results": []},
     )
 
     await client.events(changed_at=date(2026, 1, 1), cursor="abc")
 
-    params = mock_http.get.call_args.kwargs["params"]
+    params = mock_http.request.call_args.kwargs["params"]
     assert params == {"changed_at": "2026-01-01", "cursor": "abc"}
 
 
 async def test_events_parses_response(client: EventsProviderClient, mock_http: AsyncMock) -> None:
-    mock_http.get.return_value = _make_response(
+    mock_http.request.return_value = _make_response(
         200,
         {
             "next": "http://test.local/api/events/?cursor=xyz",
@@ -123,14 +125,14 @@ async def test_events_parses_response(client: EventsProviderClient, mock_http: A
 
 
 async def test_events_raises_auth_error(client: EventsProviderClient, mock_http: AsyncMock) -> None:
-    mock_http.get.return_value = _make_response(401, {"detail": "Invalid API key"})
+    mock_http.request.return_value = _make_response(401, {"detail": "Invalid API key"})
 
     with pytest.raises(EventsProviderAuthError):
         await client.events(changed_at=date(2000, 1, 1))
 
 
 async def test_events_raises_not_found(client: EventsProviderClient, mock_http: AsyncMock) -> None:
-    mock_http.get.return_value = _make_response(404, {"detail": "Event not found"})
+    mock_http.request.return_value = _make_response(404, {"detail": "Event not found"})
 
     with pytest.raises(EventsProviderNotFoundError):
         await client.events(changed_at=date(2000, 1, 1))
@@ -139,7 +141,16 @@ async def test_events_raises_not_found(client: EventsProviderClient, mock_http: 
 async def test_events_raises_server_error(
     client: EventsProviderClient, mock_http: AsyncMock
 ) -> None:
-    mock_http.get.return_value = _make_response(500, text="Internal Server Error")
+    mock_http.request.return_value = _make_response(500, text="Internal Server Error")
 
     with pytest.raises(EventsProviderServerError):
+        await client.events(changed_at=date(2000, 1, 1))
+
+
+async def test_events_raises_unavailable_on_timeout(
+    client: EventsProviderClient, mock_http: AsyncMock
+) -> None:
+    mock_http.request.side_effect = httpx.ConnectTimeout("timeout")
+
+    with pytest.raises(EventsProviderUnavailableError):
         await client.events(changed_at=date(2000, 1, 1))

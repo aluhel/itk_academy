@@ -3,7 +3,7 @@ from datetime import datetime
 
 from sqlalchemy import DateTime, String
 from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, mapped_column
 
 from itk_academy.db.base import Base
 
@@ -19,9 +19,3 @@ class Place(Base):
 
     changed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-
-    events: Mapped[list["Event"]] = relationship(  # noqa: F821
-        back_populates="place",
-        cascade="all, delete-orphan",
-        lazy="selectin",
-    )

@@ -14,18 +14,6 @@ class PlaceDTO:
     changed_at: datetime
     created_at: datetime
 
-    @classmethod
-    def from_raw(cls, data: dict[str, Any]) -> "PlaceDTO":
-        return cls(
-            id=UUID(data["id"]),
-            name=data["name"],
-            city=data["city"],
-            address=data["address"],
-            seats_pattern=data["seats_pattern"],
-            changed_at=datetime.fromisoformat(data["changed_at"]),
-            created_at=datetime.fromisoformat(data["created_at"]),
-        )
-
 
 @dataclass(frozen=True, slots=True)
 class EventDTO:
@@ -40,35 +28,12 @@ class EventDTO:
     created_at: datetime
     status_changed_at: datetime
 
-    @classmethod
-    def from_raw(cls, data: dict[str, Any]) -> "EventDTO":
-        return cls(
-            id=UUID(data["id"]),
-            name=data["name"],
-            place=PlaceDTO.from_raw(data["place"]),
-            event_time=datetime.fromisoformat(data["event_time"]),
-            registration_deadline=datetime.fromisoformat(data["registration_deadline"]),
-            status=data["status"],
-            number_of_visitors=data["number_of_visitors"],
-            changed_at=datetime.fromisoformat(data["changed_at"]),
-            created_at=datetime.fromisoformat(data["created_at"]),
-            status_changed_at=datetime.fromisoformat(data["status_changed_at"]),
-        )
-
 
 @dataclass(frozen=True, slots=True)
 class EventsPage:
     results: list[EventDTO]
     next_url: str | None
     previous_url: str | None
-
-    @classmethod
-    def from_raw(cls, data: dict[str, Any]) -> "EventsPage":
-        return cls(
-            results=[EventDTO.from_raw(item) for item in data["results"]],
-            next_url=data.get("next"),
-            previous_url=data.get("previous"),
-        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -81,6 +46,41 @@ class SeatsDTO:
 class TicketDTO:
     ticket_id: UUID
 
-    @classmethod
-    def from_raw(cls, data: dict[str, Any]) -> "TicketDTO":
-        return cls(ticket_id=UUID(data["ticket_id"]))
+
+def parse_place(data: dict[str, Any]) -> PlaceDTO:
+    return PlaceDTO(
+        id=UUID(data["id"]),
+        name=data["name"],
+        city=data["city"],
+        address=data["address"],
+        seats_pattern=data["seats_pattern"],
+        changed_at=datetime.fromisoformat(data["changed_at"]),
+        created_at=datetime.fromisoformat(data["created_at"]),
+    )
+
+
+def parse_event(data: dict[str, Any]) -> EventDTO:
+    return EventDTO(
+        id=UUID(data["id"]),
+        name=data["name"],
+        place=parse_place(data["place"]),
+        event_time=datetime.fromisoformat(data["event_time"]),
+        registration_deadline=datetime.fromisoformat(data["registration_deadline"]),
+        status=data["status"],
+        number_of_visitors=data["number_of_visitors"],
+        changed_at=datetime.fromisoformat(data["changed_at"]),
+        created_at=datetime.fromisoformat(data["created_at"]),
+        status_changed_at=datetime.fromisoformat(data["status_changed_at"]),
+    )
+
+
+def parse_events_page(data: dict[str, Any]) -> EventsPage:
+    return EventsPage(
+        results=[parse_event(item) for item in data["results"]],
+        next_url=data.get("next"),
+        previous_url=data.get("previous"),
+    )
+
+
+def parse_ticket(data: dict[str, Any]) -> TicketDTO:
+    return TicketDTO(ticket_id=UUID(data["ticket_id"]))

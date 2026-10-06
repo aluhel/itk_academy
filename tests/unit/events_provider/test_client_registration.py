@@ -45,7 +45,7 @@ def client(mock_http: AsyncMock) -> EventsProviderClient:
 async def test_register_sends_payload_and_returns_ticket(
     client: EventsProviderClient, mock_http: AsyncMock
 ) -> None:
-    mock_http.post.return_value = _make_response(201, {"ticket_id": str(TICKET_ID)})
+    mock_http.request.return_value = _make_response(201, {"ticket_id": str(TICKET_ID)})
 
     result = await client.register(
         event_id=EVENT_ID,
@@ -56,8 +56,9 @@ async def test_register_sends_payload_and_returns_ticket(
     )
 
     assert result.ticket_id == TICKET_ID
-    call_args = mock_http.post.call_args
-    assert call_args.args[0] == f"/api/events/{EVENT_ID}/register/"
+    call_args = mock_http.request.call_args
+    assert call_args.args[0] == "POST"
+    assert call_args.args[1] == f"/api/events/{EVENT_ID}/register/"
     assert call_args.kwargs["json"] == {
         "first_name": "Ivan",
         "last_name": "Ivanov",
@@ -69,7 +70,7 @@ async def test_register_sends_payload_and_returns_ticket(
 async def test_register_raises_bad_request_for_taken_seat(
     client: EventsProviderClient, mock_http: AsyncMock
 ) -> None:
-    mock_http.post.return_value = _make_response(
+    mock_http.request.return_value = _make_response(
         400, text='["This ticket is not available (already sold)."]'
     )
 
@@ -86,7 +87,7 @@ async def test_register_raises_bad_request_for_taken_seat(
 async def test_register_raises_not_found(
     client: EventsProviderClient, mock_http: AsyncMock
 ) -> None:
-    mock_http.post.return_value = _make_response(404, {"detail": "Event not found."})
+    mock_http.request.return_value = _make_response(404, {"detail": "Event not found."})
 
     with pytest.raises(EventsProviderNotFoundError):
         await client.register(

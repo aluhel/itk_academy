@@ -36,6 +36,11 @@ class SyncEventsUsecase:
     async def do(self) -> dict:
         settings = get_settings()
         metadata = await self._sync_metadata.get_or_create()
+        if metadata.sync_status == SyncStatus.RUNNING:
+            logger.warning(
+                "sync_already_running",
+                last_sync_time=str(metadata.last_sync_time),
+            )
 
         # Начинаем синхронизацию
         await self._sync_metadata.update(

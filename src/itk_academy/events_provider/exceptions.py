@@ -22,5 +22,9 @@ class EventsProviderServerError(EventsProviderError):
     """5xx — server-side error."""
 
 
+class EventsProviderUnavailableError(EventsProviderError):
+    """Timeout or connection error — provider unreachable."""
+
+
 class EventsProviderUnexpectedError(EventsProviderError):
     """Any unexpected error."""

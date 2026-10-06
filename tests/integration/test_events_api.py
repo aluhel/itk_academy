@@ -118,9 +118,9 @@ async def test_get_event_returns_404_for_unknown_uuid(
     assert response.json()["detail"] == "Event not found"
 
 
-async def test_get_event_returns_404_for_invalid_uuid(
+async def test_get_event_returns_422_for_invalid_uuid(
     api_client,
 ) -> None:
     response = await api_client.get("/api/events/not-a-uuid")
 
-    assert response.status_code == 404
+    assert response.status_code == 422

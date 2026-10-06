@@ -6,6 +6,7 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from itk_academy.db.base import Base
+from itk_academy.models.place import Place
 
 
 class Event(Base):
@@ -30,10 +31,7 @@ class Event(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     status_changed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
-    place: Mapped["Place"] = relationship(  # noqa: F821
-        back_populates="events",
-        lazy="selectin",
-    )
+    place: Mapped[Place] = relationship(lazy="selectin")
     tickets: Mapped[list["Ticket"]] = relationship(  # noqa: F821
         back_populates="event",
         cascade="all, delete-orphan",

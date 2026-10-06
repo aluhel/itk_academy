@@ -106,3 +106,19 @@ async def test_get_seats_returns_404_for_unknown(
     response = await api_client.get(f"/api/events/{uuid4()}/seats")
 
     assert response.status_code == 404
+
+
+async def test_get_seats_returns_502_on_provider_timeout(
+    api_client,
+    db_session: AsyncSession,
+    fake_provider_client: AsyncMock,
+) -> None:
+    from itk_academy.events_provider.exceptions import EventsProviderUnavailableError
+
+    event = await _seed_published_event(db_session)
+    fake_provider_client.seats.side_effect = EventsProviderUnavailableError("timeout")
+
+    response = await api_client.get(f"/api/events/{event.id}/seats")
+
+    assert response.status_code == 502
+    assert response.json()["detail"] == "Events provider unavailable"

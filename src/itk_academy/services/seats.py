@@ -3,9 +3,9 @@ from uuid import UUID
 import structlog
 
 from itk_academy.core.cache import TTLCache, get_or_set
-from itk_academy.events_provider.client import EventsProviderClient
 from itk_academy.models.enums import EventStatus
 from itk_academy.repositories.protocols import EventRepository
+from itk_academy.services.ports import EventsProvider
 
 logger = structlog.get_logger(__name__)
 
@@ -25,7 +25,7 @@ class GetSeatsUsecase:
     def __init__(
         self,
         *,
-        client: EventsProviderClient,
+        client: EventsProvider,
         events: EventRepository,
         cache: TTLCache[list[str]],
     ) -> None:

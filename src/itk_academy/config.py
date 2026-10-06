@@ -15,7 +15,7 @@ class Settings(BaseSettings):
     port: int = 8000
     log_level: str = "INFO"
 
-    events_provider_url: str = "http://events-provider.dev-2.python-labs.ru"
+    events_provider_url: str = "https://events-provider.dev-2.python-labs.ru"
     events_provider_api_key: str = ""
 
     database_url: str = ""

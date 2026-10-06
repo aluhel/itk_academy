@@ -5,13 +5,20 @@ from uuid import UUID
 
 import httpx
 
-from itk_academy.events_provider.dto import EventsPage, SeatsDTO, TicketDTO
+from itk_academy.events_provider.dto import (
+    EventsPage,
+    SeatsDTO,
+    TicketDTO,
+    parse_events_page,
+    parse_ticket,
+)
 from itk_academy.events_provider.exceptions import (
     EventsProviderAuthError,
     EventsProviderBadRequestError,
     EventsProviderNotFoundError,
     EventsProviderRateLimitError,
     EventsProviderServerError,
+    EventsProviderUnavailableError,
     EventsProviderUnexpectedError,
 )
 
@@ -24,6 +31,7 @@ class EventsProviderClient:
         timeout: float = 10.0,
     ) -> None:
         self._base_url = base_url.rstrip("/")
+        transport = httpx.AsyncHTTPTransport(retries=3)
         self._http = httpx.AsyncClient(
             base_url=self._base_url,
             timeout=timeout,
@@ -32,6 +40,7 @@ class EventsProviderClient:
                 "Accept": "application/json",
             },
             follow_redirects=True,
+            transport=transport,
         )
 
     async def __aenter__(self) -> "EventsProviderClient":
@@ -57,15 +66,15 @@ class EventsProviderClient:
         if cursor is not None:
             params["cursor"] = cursor
 
-        data = await self._get_json("/api/events/", params=params)
-        return EventsPage.from_raw(data)
+        data = await self._request_json("GET", "/api/events/", params=params)
+        return parse_events_page(data)
 
     async def events_by_url(self, url: str) -> EventsPage:
-        data = await self._get_json(url)
-        return EventsPage.from_raw(data)
+        data = await self._request_json("GET", url)
+        return parse_events_page(data)
 
     async def seats(self, event_id: UUID) -> SeatsDTO:
-        data = await self._get_json(f"/api/events/{event_id}/seats/")
+        data = await self._request_json("GET", f"/api/events/{event_id}/seats/")
         return SeatsDTO(event_id=event_id, seats=data["seats"])
 
     async def register(
@@ -82,54 +91,61 @@ class EventsProviderClient:
             "email": email,
             "seat": seat,
         }
-        data = await self._post_json(f"/api/events/{event_id}/register/", json=payload)
-        return TicketDTO.from_raw(data)
+        data = await self._request_json(
+            "POST",
+            f"/api/events/{event_id}/register/",
+            json=payload,
+        )
+        return parse_ticket(data)
 
     async def unregister(self, event_id: UUID, ticket_id: UUID) -> None:
-        await self._delete_json(
+        await self._request_json(
+            "DELETE",
             f"/api/events/{event_id}/unregister/",
             json={"ticket_id": str(ticket_id)},
+            allow_empty_response=True,
         )
 
-    async def _post_json(self, url: str, json: dict[str, Any]) -> Any:
-        response = await self._http.post(url, json=json)
-        self._raise_for_status(response)
-        return response.json()
-
-    async def _delete_json(self, url: str, json: dict[str, Any]) -> Any:
-        response = await self._http.request("DELETE", url, json=json)
-        self._raise_for_status(response)
-        if response.content:
-            return response.json()
-        return None
-
-    async def _get_json(
+    async def _request_json(
         self,
+        method: str,
         url: str,
+        *,
         params: dict[str, str] | None = None,
+        json: dict[str, Any] | None = None,
+        allow_empty_response: bool = False,
     ) -> Any:
-        response = await self._http.get(url, params=params)
-        self._raise_for_status(response)
+        try:
+            response = await self._http.request(method, url, params=params, json=json)
+        except httpx.TimeoutException as exc:
+            raise EventsProviderUnavailableError(f"timeout: {exc}") from exc
+        except httpx.TransportError as exc:
+            raise EventsProviderUnavailableError(str(exc)) from exc
+
+        _raise_for_status(response)
+
+        if allow_empty_response and not response.content:
+            return None
         return response.json()
 
-    @staticmethod
-    def _raise_for_status(response: httpx.Response) -> None:
-        status = response.status_code
-        if status < 400:
-            return
 
-        detail = _safe_detail(response)
-        if status == 400:
-            raise EventsProviderBadRequestError(detail)
-        if status == 401:
-            raise EventsProviderAuthError(detail)
-        if status == 404:
-            raise EventsProviderNotFoundError(detail)
-        if status == 429:
-            raise EventsProviderRateLimitError(detail)
-        if 500 <= status < 600:
-            raise EventsProviderServerError(detail)
-        raise EventsProviderUnexpectedError(f"{status}: {detail}")
+def _raise_for_status(response: httpx.Response) -> None:
+    status = response.status_code
+    if status < 400:
+        return
+
+    detail = _safe_detail(response)
+    if status == 400:
+        raise EventsProviderBadRequestError(detail)
+    if status == 401:
+        raise EventsProviderAuthError(detail)
+    if status == 404:
+        raise EventsProviderNotFoundError(detail)
+    if status == 429:
+        raise EventsProviderRateLimitError(detail)
+    if 500 <= status < 600:
+        raise EventsProviderServerError(detail)
+    raise EventsProviderUnexpectedError(f"{status}: {detail}")
 
 
 def _safe_detail(response: httpx.Response) -> str:

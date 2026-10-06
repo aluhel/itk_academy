@@ -84,6 +84,7 @@ def get_create_ticket_usecase(
         client=client,
         events=repo,
         tickets=tickets,
+        cache=get_seats_cache(),
     )
 
 
@@ -102,6 +103,7 @@ def get_cancel_ticket_usecase(
         client=client,
         events=repo,
         tickets=tickets,
+        cache=get_seats_cache(),
     )
 
 

@@ -5,7 +5,10 @@ from uuid import uuid4
 import pytest
 
 from itk_academy.events_provider.dto import SeatsDTO, TicketDTO
-from itk_academy.events_provider.exceptions import EventsProviderBadRequestError
+from itk_academy.events_provider.exceptions import (
+    EventsProviderBadRequestError,
+    EventsProviderNotFoundError,
+)
 from itk_academy.models.enums import EventStatus
 from itk_academy.services.tickets import (
     CancelTicketUsecase,
@@ -49,6 +52,11 @@ def client() -> AsyncMock:
     return AsyncMock()
 
 
+@pytest.fixture
+def cache() -> MagicMock:
+    return MagicMock()
+
+
 # ============ CreateTicketUsecase ============
 
 
@@ -56,6 +64,7 @@ async def test_create_ticket_success(
     events_repo: AsyncMock,
     tickets_repo: AsyncMock,
     client: AsyncMock,
+    cache: MagicMock,
 ) -> None:
     events_repo.get.return_value = _make_event()
     client.seats.return_value = SeatsDTO(event_id=EVENT_ID, seats=["A1", "A2"])
@@ -65,7 +74,9 @@ async def test_create_ticket_success(
     ticket_mock.id = TICKET_ID
     tickets_repo.create.return_value = ticket_mock
 
-    usecase = CreateTicketUsecase(client=client, events=events_repo, tickets=tickets_repo)
+    usecase = CreateTicketUsecase(
+        client=client, events=events_repo, tickets=tickets_repo, cache=cache
+    )
     result = await usecase.do(
         event_id=EVENT_ID,
         first_name="Ivan",
@@ -86,10 +97,13 @@ async def test_create_ticket_event_not_found(
     events_repo: AsyncMock,
     tickets_repo: AsyncMock,
     client: AsyncMock,
+    cache: MagicMock,
 ) -> None:
     events_repo.get.return_value = None
 
-    usecase = CreateTicketUsecase(client=client, events=events_repo, tickets=tickets_repo)
+    usecase = CreateTicketUsecase(
+        client=client, events=events_repo, tickets=tickets_repo, cache=cache
+    )
     with pytest.raises(TicketEventNotFoundError):
         await usecase.do(
             event_id=EVENT_ID,
@@ -107,10 +121,13 @@ async def test_create_ticket_event_not_published(
     events_repo: AsyncMock,
     tickets_repo: AsyncMock,
     client: AsyncMock,
+    cache: MagicMock,
 ) -> None:
     events_repo.get.return_value = _make_event(status="finished")
 
-    usecase = CreateTicketUsecase(client=client, events=events_repo, tickets=tickets_repo)
+    usecase = CreateTicketUsecase(
+        client=client, events=events_repo, tickets=tickets_repo, cache=cache
+    )
     with pytest.raises(TicketEventNotPublishedError):
         await usecase.do(
             event_id=EVENT_ID,
@@ -127,10 +144,13 @@ async def test_create_ticket_deadline_passed(
     events_repo: AsyncMock,
     tickets_repo: AsyncMock,
     client: AsyncMock,
+    cache: MagicMock,
 ) -> None:
     events_repo.get.return_value = _make_event(deadline_in_days=-1)
 
-    usecase = CreateTicketUsecase(client=client, events=events_repo, tickets=tickets_repo)
+    usecase = CreateTicketUsecase(
+        client=client, events=events_repo, tickets=tickets_repo, cache=cache
+    )
     with pytest.raises(TicketRegistrationClosedError):
         await usecase.do(
             event_id=EVENT_ID,
@@ -147,11 +167,14 @@ async def test_create_ticket_seat_not_available(
     events_repo: AsyncMock,
     tickets_repo: AsyncMock,
     client: AsyncMock,
+    cache: MagicMock,
 ) -> None:
     events_repo.get.return_value = _make_event()
     client.seats.return_value = SeatsDTO(event_id=EVENT_ID, seats=["A1", "A2"])
 
-    usecase = CreateTicketUsecase(client=client, events=events_repo, tickets=tickets_repo)
+    usecase = CreateTicketUsecase(
+        client=client, events=events_repo, tickets=tickets_repo, cache=cache
+    )
     with pytest.raises(TicketSeatNotAvailableError):
         await usecase.do(
             event_id=EVENT_ID,
@@ -168,13 +191,16 @@ async def test_create_ticket_provider_race_returns_seat_unavailable(
     events_repo: AsyncMock,
     tickets_repo: AsyncMock,
     client: AsyncMock,
+    cache: MagicMock,
 ) -> None:
     """Если провайдер вернул 400 (место занято) — маппим в TicketSeatNotAvailableError."""
     events_repo.get.return_value = _make_event()
     client.seats.return_value = SeatsDTO(event_id=EVENT_ID, seats=["A1"])
     client.register.side_effect = EventsProviderBadRequestError("already sold")
 
-    usecase = CreateTicketUsecase(client=client, events=events_repo, tickets=tickets_repo)
+    usecase = CreateTicketUsecase(
+        client=client, events=events_repo, tickets=tickets_repo, cache=cache
+    )
     with pytest.raises(TicketSeatNotAvailableError):
         await usecase.do(
             event_id=EVENT_ID,
@@ -187,6 +213,64 @@ async def test_create_ticket_provider_race_returns_seat_unavailable(
     tickets_repo.create.assert_not_awaited()
 
 
+async def test_create_ticket_invalidates_cache_on_success(
+    events_repo: AsyncMock,
+    tickets_repo: AsyncMock,
+    client: AsyncMock,
+    cache: MagicMock,
+) -> None:
+    events_repo.get.return_value = _make_event()
+    client.seats.return_value = SeatsDTO(event_id=EVENT_ID, seats=["A1"])
+    client.register.return_value = TicketDTO(ticket_id=PROVIDER_TICKET_ID)
+
+    ticket_mock = MagicMock()
+    ticket_mock.id = TICKET_ID
+    tickets_repo.create.return_value = ticket_mock
+
+    usecase = CreateTicketUsecase(
+        client=client, events=events_repo, tickets=tickets_repo, cache=cache
+    )
+    await usecase.do(
+        event_id=EVENT_ID,
+        first_name="Ivan",
+        last_name="Ivanov",
+        email="ivan@example.com",
+        seat="A1",
+    )
+
+    cache.invalidate.assert_called_once_with(f"seats:{EVENT_ID}")
+
+
+async def test_create_ticket_compensates_on_save_failure(
+    events_repo: AsyncMock,
+    tickets_repo: AsyncMock,
+    client: AsyncMock,
+    cache: MagicMock,
+) -> None:
+    events_repo.get.return_value = _make_event()
+    client.seats.return_value = SeatsDTO(event_id=EVENT_ID, seats=["A1"])
+    client.register.return_value = TicketDTO(ticket_id=PROVIDER_TICKET_ID)
+    tickets_repo.create.side_effect = RuntimeError("db down")
+
+    usecase = CreateTicketUsecase(
+        client=client, events=events_repo, tickets=tickets_repo, cache=cache
+    )
+    with pytest.raises(RuntimeError):
+        await usecase.do(
+            event_id=EVENT_ID,
+            first_name="Ivan",
+            last_name="Ivanov",
+            email="ivan@example.com",
+            seat="A1",
+        )
+
+    client.unregister.assert_awaited_once_with(
+        event_id=EVENT_ID,
+        ticket_id=PROVIDER_TICKET_ID,
+    )
+    cache.invalidate.assert_not_called()
+
+
 # ============ CancelTicketUsecase ============
 
 
@@ -194,6 +278,7 @@ async def test_cancel_ticket_success(
     events_repo: AsyncMock,
     tickets_repo: AsyncMock,
     client: AsyncMock,
+    cache: MagicMock,
 ) -> None:
     ticket_mock = MagicMock()
     ticket_mock.id = TICKET_ID
@@ -201,7 +286,9 @@ async def test_cancel_ticket_success(
     ticket_mock.provider_ticket_id = PROVIDER_TICKET_ID
     tickets_repo.get.return_value = ticket_mock
 
-    usecase = CancelTicketUsecase(client=client, events=events_repo, tickets=tickets_repo)
+    usecase = CancelTicketUsecase(
+        client=client, events=events_repo, tickets=tickets_repo, cache=cache
+    )
     await usecase.do(ticket_id=TICKET_ID)
 
     client.unregister.assert_awaited_once_with(
@@ -215,12 +302,56 @@ async def test_cancel_ticket_not_found(
     events_repo: AsyncMock,
     tickets_repo: AsyncMock,
     client: AsyncMock,
+    cache: MagicMock,
 ) -> None:
     tickets_repo.get.return_value = None
 
-    usecase = CancelTicketUsecase(client=client, events=events_repo, tickets=tickets_repo)
+    usecase = CancelTicketUsecase(
+        client=client, events=events_repo, tickets=tickets_repo, cache=cache
+    )
     with pytest.raises(TicketNotFoundError):
         await usecase.do(ticket_id=TICKET_ID)
 
     client.unregister.assert_not_awaited()
     tickets_repo.delete.assert_not_awaited()
+
+
+async def test_cancel_ticket_idempotent_when_provider_returns_404(
+    events_repo: AsyncMock,
+    tickets_repo: AsyncMock,
+    client: AsyncMock,
+    cache: MagicMock,
+) -> None:
+    ticket_mock = MagicMock()
+    ticket_mock.id = TICKET_ID
+    ticket_mock.event_id = EVENT_ID
+    ticket_mock.provider_ticket_id = PROVIDER_TICKET_ID
+    tickets_repo.get.return_value = ticket_mock
+    client.unregister.side_effect = EventsProviderNotFoundError("not found")
+
+    usecase = CancelTicketUsecase(
+        client=client, events=events_repo, tickets=tickets_repo, cache=cache
+    )
+    await usecase.do(ticket_id=TICKET_ID)
+
+    tickets_repo.delete.assert_awaited_once_with(TICKET_ID)
+
+
+async def test_cancel_ticket_invalidates_cache(
+    events_repo: AsyncMock,
+    tickets_repo: AsyncMock,
+    client: AsyncMock,
+    cache: MagicMock,
+) -> None:
+    ticket_mock = MagicMock()
+    ticket_mock.id = TICKET_ID
+    ticket_mock.event_id = EVENT_ID
+    ticket_mock.provider_ticket_id = PROVIDER_TICKET_ID
+    tickets_repo.get.return_value = ticket_mock
+
+    usecase = CancelTicketUsecase(
+        client=client, events=events_repo, tickets=tickets_repo, cache=cache
+    )
+    await usecase.do(ticket_id=TICKET_ID)
+
+    cache.invalidate.assert_called_once_with(f"seats:{EVENT_ID}")
