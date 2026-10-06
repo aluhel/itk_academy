@@ -3,14 +3,16 @@ from datetime import date, datetime
 from typing import Protocol
 from uuid import UUID
 
-from itk_academy.models.event import Event
-from itk_academy.models.place import Place
-from itk_academy.models.sync_metadata import SyncMetadata
-from itk_academy.models.ticket import Ticket
+from itk_academy.domain.entities import (
+    EventEntity,
+    PlaceEntity,
+    SyncMetadataEntity,
+    TicketEntity,
+)
 
 
 class EventRepository(Protocol):
-    async def get(self, event_id: UUID) -> Event | None: ...
+    async def get(self, event_id: UUID) -> EventEntity | None: ...
 
     async def list_paginated(
         self,
@@ -18,32 +20,19 @@ class EventRepository(Protocol):
         date_from: date | None,
         limit: int,
         offset: int,
-    ) -> tuple[Sequence[Event], int]: ...
+    ) -> tuple[Sequence[EventEntity], int]: ...
 
-    async def upsert_many(self, events: Sequence[dict]) -> int: ...
+    async def upsert_many(self, events: Sequence[EventEntity]) -> int: ...
 
 
 class PlaceRepository(Protocol):
-    async def get(self, place_id: UUID) -> Place | None: ...
+    async def get(self, place_id: UUID) -> PlaceEntity | None: ...
 
-    async def upsert_many(self, places: Sequence[dict]) -> int: ...
-
-
-class SyncMetadataRepository(Protocol):
-    async def get(self) -> SyncMetadata | None: ...
-
-    async def update(
-        self,
-        *,
-        last_sync_time: datetime | None = None,
-        last_changed_at: datetime | None = None,
-        sync_status: str | None = None,
-        last_error: str | None = None,
-    ) -> SyncMetadata: ...
+    async def upsert_many(self, places: Sequence[PlaceEntity]) -> int: ...
 
 
 class TicketRepository(Protocol):
-    async def get(self, ticket_id: UUID) -> Ticket | None: ...
+    async def get(self, ticket_id: UUID) -> TicketEntity | None: ...
 
     async def create(
         self,
@@ -54,10 +43,31 @@ class TicketRepository(Protocol):
         last_name: str,
         email: str,
         seat: str,
-    ) -> Ticket: ...
+    ) -> TicketEntity: ...
 
     async def delete(self, ticket_id: UUID) -> None: ...
 
 
+class SyncMetadataRepository(Protocol):
+    async def get(self) -> SyncMetadataEntity | None: ...
+
+    async def get_or_create(self) -> SyncMetadataEntity: ...
+
+    async def update(
+        self,
+        *,
+        last_sync_time: datetime | None = None,
+        last_changed_at: datetime | None = None,
+        sync_status: str | None = None,
+        last_error: str | None = None,
+    ) -> SyncMetadataEntity: ...
+
+
 class SeatsCache(Protocol):
     def invalidate(self, key: str) -> None: ...
+
+
+class UnitOfWork(Protocol):
+    async def commit(self) -> None: ...
+
+    async def rollback(self) -> None: ...

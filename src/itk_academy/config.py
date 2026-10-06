@@ -23,15 +23,14 @@ class Settings(BaseSettings):
     # Observability
     sentry_dsn: str = ""
 
+    # Часовой пояс для интерпретации фильтра date_from
+    timezone: str = "Europe/Moscow"
+
     # Час по UTC, в который запускается ежедневная синхронизация
     sync_hour_utc: int = 2
 
     @property
-    def celery_broker_url(self) -> str:
-        if not self.database_url:
-            return ""
-        sync_url = self.database_url.replace("+asyncpg", "+psycopg2")
-        return f"sqla+{sync_url}"
+    def celery_broker_url(self) -> str: ...
 
 
 @lru_cache

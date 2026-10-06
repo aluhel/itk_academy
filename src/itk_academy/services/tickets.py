@@ -10,11 +10,11 @@ from itk_academy.events_provider.exceptions import (
     EventsProviderNotFoundError,
 )
 from itk_academy.models.enums import EventStatus
-from itk_academy.models.ticket import Ticket
 from itk_academy.repositories.protocols import (
     EventRepository,
     SeatsCache,
     TicketRepository,
+    UnitOfWork,
 )
 from itk_academy.services.ports import EventsProvider
 
@@ -49,11 +49,13 @@ class CreateTicketUsecase:
         events: EventRepository,
         tickets: TicketRepository,
         cache: SeatsCache,
+        uow: UnitOfWork,
     ) -> None:
         self._client = client
         self._events = events
         self._tickets = tickets
         self._cache = cache
+        self._uow = uow
 
     async def do(
         self,
@@ -63,7 +65,7 @@ class CreateTicketUsecase:
         last_name: str,
         email: str,
         seat: str,
-    ) -> Ticket:
+    ):
         event = await self._events.get(event_id)
         if event is None:
             raise TicketEventNotFoundError(f"Event {event_id} not found")
@@ -101,6 +103,7 @@ class CreateTicketUsecase:
                 email=email,
                 seat=seat,
             )
+            await self._uow.commit()
         except Exception:
             logger.exception(
                 "ticket_save_failed_compensating",
@@ -135,11 +138,13 @@ class CancelTicketUsecase:
         events: EventRepository,
         tickets: TicketRepository,
         cache: SeatsCache,
+        uow: UnitOfWork,
     ) -> None:
         self._client = client
         self._events = events
         self._tickets = tickets
         self._cache = cache
+        self._uow = uow
 
     async def do(self, *, ticket_id: UUID) -> None:
         ticket = await self._tickets.get(ticket_id)
@@ -158,6 +163,7 @@ class CancelTicketUsecase:
             )
 
         await self._tickets.delete(ticket_id)
+        await self._uow.commit()
         self._cache.invalidate(f"seats:{ticket.event_id}")
 
         logger.info(

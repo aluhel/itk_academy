@@ -4,6 +4,7 @@ import structlog
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from itk_academy.config import get_settings
+from itk_academy.db.uow import SqlAlchemyUnitOfWork
 from itk_academy.events_provider.client import EventsProviderClient
 from itk_academy.repositories.events import SqlAlchemyEventRepository
 from itk_academy.repositories.places import SqlAlchemyPlaceRepository
@@ -17,7 +18,7 @@ logger = structlog.get_logger(__name__)
 async def _run_sync() -> dict:
     settings = get_settings()
 
-    # Свой engine на каждый запуск таски, чтобы не тащить пул между разными event loop'ами.
+    # Свой engine на каждый запуск таски, чтобы не тащить пул между event loop'ами.
     engine = create_async_engine(settings.database_url, pool_pre_ping=True)
     factory = async_sessionmaker(engine, expire_on_commit=False)
 
@@ -33,6 +34,7 @@ async def _run_sync() -> dict:
                     events=SqlAlchemyEventRepository(session),
                     places=SqlAlchemyPlaceRepository(session),
                     sync_metadata=SqlAlchemySyncMetadataRepository(session),
+                    uow=SqlAlchemyUnitOfWork(session),
                 )
                 return await usecase.do()
             finally:

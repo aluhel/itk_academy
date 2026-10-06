@@ -7,8 +7,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from itk_academy.core.cache import TTLCache
 from itk_academy.db.session import get_session
+from itk_academy.db.uow import SqlAlchemyUnitOfWork
 from itk_academy.events_provider.client import EventsProviderClient
 from itk_academy.repositories.events import SqlAlchemyEventRepository
+from itk_academy.repositories.protocols import UnitOfWork
 from itk_academy.repositories.tickets import SqlAlchemyTicketRepository
 from itk_academy.services.seats import SEATS_CACHE_TTL_SECONDS, GetSeatsUsecase
 from itk_academy.services.tickets import CancelTicketUsecase, CreateTicketUsecase
@@ -39,6 +41,15 @@ ProviderClientDep = Annotated[
     EventsProviderClient,
     Depends(get_provider_client),
 ]
+
+
+def get_uow(
+    session: Annotated[AsyncSession, Depends(_session_dep)],
+) -> UnitOfWork:
+    return SqlAlchemyUnitOfWork(session)
+
+
+UnitOfWorkDep = Annotated[UnitOfWork, Depends(get_uow)]
 
 
 @lru_cache
@@ -79,12 +90,14 @@ def get_create_ticket_usecase(
     repo: EventRepositoryDep,
     tickets: TicketRepositoryDep,
     client: ProviderClientDep,
+    uow: UnitOfWorkDep,
 ) -> CreateTicketUsecase:
     return CreateTicketUsecase(
         client=client,
         events=repo,
         tickets=tickets,
         cache=get_seats_cache(),
+        uow=uow,
     )
 
 
@@ -98,12 +111,14 @@ def get_cancel_ticket_usecase(
     repo: EventRepositoryDep,
     tickets: TicketRepositoryDep,
     client: ProviderClientDep,
+    uow: UnitOfWorkDep,
 ) -> CancelTicketUsecase:
     return CancelTicketUsecase(
         client=client,
         events=repo,
         tickets=tickets,
         cache=get_seats_cache(),
+        uow=uow,
     )
 
 
