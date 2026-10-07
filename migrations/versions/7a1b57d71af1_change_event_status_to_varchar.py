@@ -25,7 +25,7 @@ def upgrade() -> None:
         existing_type=sa.Enum("NEW", "PUBLISHED", name="event_status"),
         type_=sa.String(length=50),
         existing_nullable=False,
-        postgresql_using="status::text",
+        postgresql_using="lower(status::text)",
     )
     op.execute("DROP TYPE IF EXISTS event_status")
 

@@ -78,7 +78,7 @@ async def test_create_ticket_success(
 
     ticket_mock = MagicMock()
     ticket_mock.id = TICKET_ID
-    tickets_repo.create.return_value = ticket_mock
+    tickets_repo.save_for_seat.return_value = ticket_mock
 
     usecase = CreateTicketUsecase(
         client=client,
@@ -97,9 +97,9 @@ async def test_create_ticket_success(
 
     assert result.id == TICKET_ID
     client.register.assert_awaited_once()
-    tickets_repo.create.assert_awaited_once()
+    tickets_repo.save_for_seat.assert_awaited_once()
     uow.commit.assert_awaited_once()
-    create_kwargs = tickets_repo.create.await_args.kwargs
+    create_kwargs = tickets_repo.save_for_seat.await_args.kwargs
     assert create_kwargs["provider_ticket_id"] == PROVIDER_TICKET_ID
     assert create_kwargs["seat"] == "A1"
 
@@ -247,7 +247,7 @@ async def test_create_ticket_provider_race_returns_seat_unavailable(
             seat="A1",
         )
 
-    tickets_repo.create.assert_not_awaited()
+    tickets_repo.save_for_seat.assert_not_awaited()
 
 
 async def test_create_ticket_invalidates_cache_on_success(
@@ -263,7 +263,7 @@ async def test_create_ticket_invalidates_cache_on_success(
 
     ticket_mock = MagicMock()
     ticket_mock.id = TICKET_ID
-    tickets_repo.create.return_value = ticket_mock
+    tickets_repo.save_for_seat.return_value = ticket_mock
 
     usecase = CreateTicketUsecase(
         client=client,
@@ -293,7 +293,7 @@ async def test_create_ticket_compensates_on_save_failure(
     events_repo.get.return_value = _make_event()
     client.seats.return_value = SeatsDTO(event_id=EVENT_ID, seats=["A1"])
     client.register.return_value = TicketDTO(ticket_id=PROVIDER_TICKET_ID)
-    tickets_repo.create.side_effect = RuntimeError("db down")
+    tickets_repo.save_for_seat.side_effect = RuntimeError("db down")
 
     usecase = CreateTicketUsecase(
         client=client,

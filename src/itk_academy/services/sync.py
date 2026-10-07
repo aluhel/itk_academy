@@ -5,9 +5,9 @@ import structlog
 
 from itk_academy.config import get_settings
 from itk_academy.domain.entities import EventEntity, PlaceEntity
-from itk_academy.events_provider.client import EventsProviderClient
 from itk_academy.events_provider.dto import EventDTO, PlaceDTO
 from itk_academy.events_provider.paginator import EventsPaginator
+from itk_academy.events_provider.ports import EventsSource
 from itk_academy.models.enums import SyncStatus
 from itk_academy.repositories.protocols import (
     EventRepository,
@@ -55,7 +55,7 @@ class SyncEventsUsecase:
     def __init__(
         self,
         *,
-        client: EventsProviderClient,
+        client: EventsSource,
         events: EventRepository,
         places: PlaceRepository,
         sync_metadata: SyncMetadataRepository,

@@ -14,7 +14,11 @@ else
 fi
 
 echo "Starting uvicorn..."
-exec uvicorn itk_academy.main:app \
+uvicorn itk_academy.main:app \
     --host 0.0.0.0 \
     --port "${PORT:-8000}" \
-    --workers 1
+    --workers 1 &
+
+# Если любой из процессов упадёт — падает и контейнер, платформа перезапустит.
+wait -n
+exit $?

@@ -4,6 +4,7 @@ from uuid import UUID
 
 import structlog
 
+from itk_academy.domain.entities import TicketEntity
 from itk_academy.events_provider.exceptions import (
     EventsProviderBadRequestError,
     EventsProviderError,
@@ -65,7 +66,7 @@ class CreateTicketUsecase:
         last_name: str,
         email: str,
         seat: str,
-    ):
+    ) -> TicketEntity:
         event = await self._events.get(event_id)
         if event is None:
             raise TicketEventNotFoundError(f"Event {event_id} not found")
@@ -95,7 +96,7 @@ class CreateTicketUsecase:
             raise TicketSeatNotAvailableError(str(exc)) from exc
 
         try:
-            ticket = await self._tickets.create(
+            ticket = await self._tickets.save_for_seat(
                 event_id=event_id,
                 provider_ticket_id=ticket_dto.ticket_id,
                 first_name=first_name,

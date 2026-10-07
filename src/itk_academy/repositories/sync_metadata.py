@@ -1,5 +1,4 @@
 from datetime import UTC, datetime
-from uuid import UUID  # noqa: F401  # keep UUID import for protocol parity
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession

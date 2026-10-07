@@ -34,7 +34,7 @@ class PlaceRepository(Protocol):
 class TicketRepository(Protocol):
     async def get(self, ticket_id: UUID) -> TicketEntity | None: ...
 
-    async def create(
+    async def save_for_seat(
         self,
         *,
         event_id: UUID,

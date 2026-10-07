@@ -4,6 +4,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Query, Request, status
 
+from itk_academy.api.v1._errors import raise_http_for_provider_error
 from itk_academy.api.v1.deps import EventRepositoryDep, SeatsUsecaseDep
 from itk_academy.api.v1.schemas.events import (
     EventDetail,
@@ -11,12 +12,7 @@ from itk_academy.api.v1.schemas.events import (
     PaginatedEvents,
     SeatsResponse,
 )
-from itk_academy.events_provider.exceptions import (
-    EventsProviderBadRequestError,
-    EventsProviderError,
-    EventsProviderNotFoundError,
-    EventsProviderRateLimitError,
-)
+from itk_academy.events_provider.exceptions import EventsProviderError
 from itk_academy.services.seats import (
     EventNotFoundError,
     EventNotPublishedError,
@@ -85,27 +81,8 @@ async def get_event_seats(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Event is not published for registration",
         ) from exc
-    except EventsProviderNotFoundError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(exc),
-        ) from exc
-    except EventsProviderBadRequestError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(exc),
-        ) from exc
-    except EventsProviderRateLimitError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Events provider rate limit exceeded",
-            headers={"Retry-After": "5"},
-        ) from exc
     except EventsProviderError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="Events provider unavailable",
-        ) from exc
+        raise_http_for_provider_error(exc)
 
     return SeatsResponse(event_id=event_id, available_seats=seats)
 

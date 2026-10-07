@@ -1,16 +1,12 @@
 from collections.abc import AsyncIterator
 from datetime import date
 
-from itk_academy.events_provider.client import EventsProviderClient
 from itk_academy.events_provider.dto import EventDTO
+from itk_academy.events_provider.ports import EventsSource
 
 
 class EventsPaginator:
-    def __init__(
-        self,
-        client: EventsProviderClient,
-        changed_at: date,
-    ) -> None:
+    def __init__(self, client: EventsSource, changed_at: date) -> None:
         self._client = client
         self._changed_at = changed_at
 
