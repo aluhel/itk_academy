@@ -30,7 +30,11 @@ class Settings(BaseSettings):
     sync_hour_utc: int = 2
 
     @property
-    def celery_broker_url(self) -> str: ...
+    def celery_broker_url(self) -> str:
+        if not self.database_url:
+            return ""
+        sync_url = self.database_url.replace("+asyncpg", "+psycopg2")
+        return f"sqla+{sync_url}"
 
 
 @lru_cache
