@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 import sentry_sdk
 import structlog
 from fastapi import FastAPI
+from fastapi.responses import PlainTextResponse
 from prometheus_fastapi_instrumentator import Instrumentator
 from sqlalchemy import text
 
@@ -12,6 +13,7 @@ from itk_academy.api.v1.router import api_router
 from itk_academy.config import get_settings
 from itk_academy.core.logging import configure_logging
 from itk_academy.db.session import get_engine
+from itk_academy.events_provider.client import EventsProviderClient
 
 logger = structlog.get_logger(__name__)
 
@@ -42,8 +44,6 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     else:
         logger.warning("database_url_not_set")
 
-    from itk_academy.events_provider.client import EventsProviderClient
-
     provider_client = EventsProviderClient(
         base_url=settings.events_provider_url,
         api_key=settings.events_provider_api_key,
@@ -68,6 +68,22 @@ def create_app() -> FastAPI:
         redoc_url="/redoc",
         openapi_url="/openapi.json",
     )
+
+    @app.get("/", include_in_schema=False)
+    async def root() -> dict[str, str]:
+        """Root endpoint for platform health checks."""
+        return {"status": "ok"}
+
+    @app.get("/health", include_in_schema=False)
+    async def health_root() -> dict[str, str]:
+        """Health endpoint for k8s readiness/liveness probes."""
+        return {"status": "ok"}
+
+    @app.get("/custom/path", include_in_schema=False)
+    async def custom_path() -> PlainTextResponse:
+        """Platform smoke-test endpoint. Kept to satisfy the template autotest."""
+        return PlainTextResponse("Hello from LMS!\nPath: /custom/path\n")
+
     app.add_middleware(RequestIDMiddleware)
     app.include_router(api_router, prefix="/api")
 
